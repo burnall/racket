@@ -80,13 +80,13 @@
          (let ([v (eval-under-env (fst-e e) env)])
            (if (apair? v)
                (apair-e1 v)
-               (error "MUPL fst applied to a non apair")))]
+               (error "MUPL fst applied to a non-apair")))]
 
         [(snd? e)
          (let ([v (eval-under-env (snd-e e) env)])
            (if (apair? v)
                (apair-e2 v)
-               (error "MUPL snd applied to a non apair")))]
+               (error "MUPL snd applied to a non-apair")))]
         
         [(aunit? e) e]
 
@@ -95,8 +95,39 @@
            (if (aunit? v)
                (int 1)
                (int 0)))]
+
+        ;(call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
+        [(closure? e) e]
+         ;(if (fun? (closure-fun e))
+         ;    (eval-under-env (fun-body (closure-fun e)) (closure-env e))
+         ;    (error "MUPL closure applied to non-function"))]
         
-        ;(struct mlet (var e body) #:transparent) ;; a local binding (let var = e in body) 
+        ;[(fun? e)
+        ; #t]
+
+        ;A call evaluates its rst and second subexpressions to values. If the rst is not a closure, it is an
+;error. Else, it evaluates the closure's function's body in the closure's environment extended to map
+;the function's name to the closure (unless the name eld is #f) and the function's argument-name
+;(i.e., the parameter name) to the result of the second subexpression.
+        [(call? e)
+         (let ([fv (eval-under-env (call-funexp e) env)]
+               [v (eval-under-env (call-actual e) env)])
+           (if (closure? fv)
+               (let* (
+                      [f (closure-fun fv)]
+                      [formal (if (fun? f) (fun-formal f) (error "MUPL closure applied to non-function"))]
+                      [env1 (if (equal? #f (closure-fun fv))
+                                   env
+                                   (cons (cons (closure-fun fv) f) env))]
+                      [closure-env (cons (cons formal v) env1)])
+                 (begin (println closure-env) (eval-under-env (fun-body f) closure-env)))
+               (error "MUPL call applied to non-closure")))]
+
+;(struct closure (env fun) #:transparent)
+;(struct fun  (nameopt formal body) #:transparent) ;; a recursive(?) 1-argument function
+;(struct call (funexp actual)       #:transparent) ;; function call
+
+        
         [#t (error (format "bad MUPL expression: ~v" e))]))
 
 ;; Do NOT change
