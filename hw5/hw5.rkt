@@ -96,19 +96,16 @@
                (int 1)
                (int 0)))]
 
-        ;(call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
-        [(closure? e) e]
-         ;(if (fun? (closure-fun e))
-         ;    (eval-under-env (fun-body (closure-fun e)) (closure-env e))
-         ;    (error "MUPL closure applied to non-function"))]
+        [(fun? e)
+         (letrec ([nameopt (fun-nameopt e)]
+                [new-env (if (equal? #f nameopt) env (cons (cons nameopt clos) env))]
+                [clos (closure new-env (fun-body e))])
+                  clos)]
         
-        ;[(fun? e)
-        ; #t]
+        [(closure? e) e]
+         
 
-        ;A call evaluates its rst and second subexpressions to values. If the rst is not a closure, it is an
-;error. Else, it evaluates the closure's function's body in the closure's environment extended to map
-;the function's name to the closure (unless the name eld is #f) and the function's argument-name
-;(i.e., the parameter name) to the result of the second subexpression.
+        ;Example: (call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
         [(call? e)
          (let ([fv (eval-under-env (call-funexp e) env)]
                [v (eval-under-env (call-actual e) env)])
@@ -120,14 +117,9 @@
                                    env
                                    (cons (cons (closure-fun fv) f) env))]
                       [closure-env (cons (cons formal v) env1)])
-                 (begin (println closure-env) (eval-under-env (fun-body f) closure-env)))
-               (error "MUPL call applied to non-closure")))]
+                 (eval-under-env (fun-body f) closure-env))
+               (error "MUPL call applied to non-closure" fv)))]
 
-;(struct closure (env fun) #:transparent)
-;(struct fun  (nameopt formal body) #:transparent) ;; a recursive(?) 1-argument function
-;(struct call (funexp actual)       #:transparent) ;; function call
-
-        
         [#t (error (format "bad MUPL expression: ~v" e))]))
 
 ;; Do NOT change
@@ -136,15 +128,27 @@
         
 ;; Problem 3
 
-(define (ifaunit e1 e2 e3) "CHANGE")
+(define (ifaunit e1 e2 e3)
+  (if (isaunit? e1) e2 e3))
 
-(define (mlet* lstlst e2) "CHANGE")
+(define (mlet* lstlst e2)
+  (if (null? lstlst)
+      e2
+     (let ([e (car lstlst)])
+       (mlet (car e) (cdr e) (mlet* (cdr lstlst) e2)))))
 
-(define (ifeq e1 e2 e3 e4) "CHANGE")
+(define (ifeq e1 e2 e3 e4)
+  (mlet* (list (cons "_x" e1) (cons "_y" e2))
+         (ifgreater (var "_x") (var "_y") e4 (ifgreater (var "_y") (var "_x") e4 e3))))
 
 ;; Problem 4
-
-(define mupl-map "CHANGE")
+(define mupl-map
+  (fun #f "f"
+       (fun "map-rec" "xs"
+            (ifaunit (var "xs")
+                      (aunit)
+                      (apair (call (var "f") (fst (var "xs")))
+                             (call (var "map-rec") (snd (var "xs"))))))))
 
 (define mupl-mapAddN 
   (mlet "map" mupl-map
