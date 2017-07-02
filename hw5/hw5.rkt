@@ -38,7 +38,7 @@
 ;; lookup a variable in an environment
 ;; Do NOT change this function
 (define (envlookup env str)
-  (cond [(null? env) (error "unbound variable during evaluation" str)]
+  (cond [(null? env) (error "unbound variable during evaluation" str env)]
         [(equal? (car (car env)) str) (cdr (car env))]
         [#t (envlookup (cdr env) str)]))
 
@@ -47,8 +47,10 @@
 ;; We will test eval-under-env by calling it directly even though
 ;; "in real life" it would be a helper function of eval-exp.
 (define (eval-under-env e env)
+  (begin (println "EVAL:") (println e) (println "")
   (cond [(var? e) 
          (envlookup env (var-string e))]
+        
         [(add? e) 
          (let ([v1 (eval-under-env (add-e1 e) env)]
                [v2 (eval-under-env (add-e2 e) env)])
@@ -57,7 +59,7 @@
                (int (+ (int-num v1) 
                        (int-num v2)))
                (error "MUPL addition applied to non-number")))]
-        ;; CHANGE add more cases here
+
         [(int? e) e]
         
         [(ifgreater? e)
@@ -74,7 +76,7 @@
                [env-new (cons (cons (mlet-var e) v) env)])
            (eval-under-env (mlet-body e) env-new))]
 
-        [(apair? e) e] 
+        [(apair? e) (apair (eval-under-env (apair-e1 e) env) (eval-under-env (apair-e2 e) env))] 
         
         [(fst? e)
          (let ([v (eval-under-env (fst-e e) env)])
@@ -97,30 +99,26 @@
                (int 0)))]
 
         [(fun? e)
-         (letrec ([nameopt (fun-nameopt e)]
-                [new-env (if (equal? #f nameopt) env (cons (cons nameopt clos) env))]
-                [clos (closure new-env (fun-body e))])
-                  clos)]
-        
+         (closure env e)]
+
         [(closure? e) e]
          
-
-        ;Example: (call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
-        [(call? e)
+        ;(call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
+        ;(struct fun  (nameopt formal body)
+        [(call? e) (begin 
          (let ([fv (eval-under-env (call-funexp e) env)]
                [v (eval-under-env (call-actual e) env)])
            (if (closure? fv)
-               (let* (
-                      [f (closure-fun fv)]
+               (let* ([f (closure-fun fv)]
                       [formal (if (fun? f) (fun-formal f) (error "MUPL closure applied to non-function"))]
-                      [env1 (if (equal? #f (closure-fun fv))
+                      [env1 (if (equal? #f (fun-nameopt f))
                                    env
-                                   (cons (cons (closure-fun fv) f) env))]
+                                   (cons (cons (fun-nameopt f) fv) env))]
                       [closure-env (cons (cons formal v) env1)])
                  (eval-under-env (fun-body f) closure-env))
-               (error "MUPL call applied to non-closure" fv)))]
+               (error "MUPL call applied to non-closure" fv))))]
 
-        [#t (error (format "bad MUPL expression: ~v" e))]))
+        [#t (error (format "bad MUPL expression: ~v" e))])))
 
 ;; Do NOT change
 (define (eval-exp e)
@@ -129,7 +127,7 @@
 ;; Problem 3
 
 (define (ifaunit e1 e2 e3)
-  (if (isaunit? e1) e2 e3))
+  (ifgreater (isaunit e1) (int 0) e2 e3))
 
 (define (mlet* lstlst e2)
   (if (null? lstlst)
@@ -152,7 +150,7 @@
 
 (define mupl-mapAddN 
   (mlet "map" mupl-map
-        "CHANGE (notice map is now in MUPL scope)"))
+        (fun #f "n" (call (var "map") (fun #f "elem" (add (var "elem") (var "n"))))))) 
 
 ;; Challenge Problem
 
