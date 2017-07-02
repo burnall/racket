@@ -47,8 +47,7 @@
 ;; We will test eval-under-env by calling it directly even though
 ;; "in real life" it would be a helper function of eval-exp.
 (define (eval-under-env e env)
-  (begin (println "EVAL:") (println e) (println "")
-  (cond [(var? e) 
+    (cond [(var? e) 
          (envlookup env (var-string e))]
         
         [(add? e) 
@@ -105,20 +104,19 @@
          
         ;(call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
         ;(struct fun  (nameopt formal body)
-        [(call? e) (begin 
-         (let ([fv (eval-under-env (call-funexp e) env)]
-               [v (eval-under-env (call-actual e) env)])
-           (if (closure? fv)
-               (let* ([f (closure-fun fv)]
-                      [formal (if (fun? f) (fun-formal f) (error "MUPL closure applied to non-function"))]
-                      [env1 (if (equal? #f (fun-nameopt f))
-                                   env
-                                   (cons (cons (fun-nameopt f) fv) env))]
-                      [closure-env (cons (cons formal v) env1)])
-                 (eval-under-env (fun-body f) closure-env))
-               (error "MUPL call applied to non-closure" fv))))]
+        [(call? e)
+         (let ([cloj (eval-under-env (call-funexp e) env)]
+               [arg (eval-under-env (call-actual e) env)])
+           (if (closure? cloj)
+               (let* ([f (closure-fun cloj)]
+                      [new-env (cons (cons (fun-formal f) arg) (closure-env cloj))]
+                      [new-env (if (fun-nameopt f)
+                                   (cons (cons (fun-nameopt f) cloj) new-env)
+                                   new-env)])
+                 (eval-under-env (fun-body f) new-env))
+               (error "MUPL call applied to nonfunction")))]
 
-        [#t (error (format "bad MUPL expression: ~v" e))])))
+        [#t (error (format "bad MUPL expression: ~v" e))]))
 
 ;; Do NOT change
 (define (eval-exp e)
@@ -142,11 +140,32 @@
 ;; Problem 4
 (define mupl-map
   (fun #f "f"
-       (fun "map-rec" "xs"
+       (fun "iter" "xs"
             (ifaunit (var "xs")
                       (aunit)
                       (apair (call (var "f") (fst (var "xs")))
-                             (call (var "map-rec") (snd (var "xs"))))))))
+                             (call (var "iter") (snd (var "xs"))))))))
+
+(define mupl-map2
+  (fun "map" "f"
+       (fun #f "xs"
+            (ifaunit (var "xs")
+                     (aunit)
+                     (apair (call (var "f") (fst (var "xs")))
+                            (call (call (var "map") (var "f"))
+                                  (snd (var "xs"))))))))
+
+(define (mmap f)
+  (letrec ([iter
+            (lambda (xs) (if (null? xs) null (cons (f (car xs)) (iter (cdr xs)))))])
+    iter))
+
+(define (mmap2 f)
+  (lambda (xs)
+    (if (null? xs)
+        null
+        (cons (f (car xs)) ((mmap2 f) (cdr xs))))))
+                   
 
 (define mupl-mapAddN 
   (mlet "map" mupl-map
