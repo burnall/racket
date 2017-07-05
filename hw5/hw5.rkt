@@ -75,7 +75,8 @@
                [env-new (cons (cons (mlet-var e) v) env)])
            (eval-under-env (mlet-body e) env-new))]
 
-        [(apair? e) (apair (eval-under-env (apair-e1 e) env) (eval-under-env (apair-e2 e) env))] 
+        [(apair? e)
+         (apair (eval-under-env (apair-e1 e) env) (eval-under-env (apair-e2 e) env))] 
         
         [(fst? e)
          (let ([v (eval-under-env (fst-e e) env)])
@@ -97,13 +98,10 @@
                (int 1)
                (int 0)))]
 
-        [(fun? e)
-         (closure env e)]
+        [(fun? e) (closure env e)]
 
         [(closure? e) e]
          
-        ;(call (closure '() (fun #f "x" (add (var "x") (int 7)))) (int 1))
-        ;(struct fun  (nameopt formal body)
         [(call? e)
          (let ([cloj (eval-under-env (call-funexp e) env)]
                [arg (eval-under-env (call-actual e) env)])
@@ -145,26 +143,6 @@
                       (aunit)
                       (apair (call (var "f") (fst (var "xs")))
                              (call (var "iter") (snd (var "xs"))))))))
-
-(define mupl-map2
-  (fun "map" "f"
-       (fun #f "xs"
-            (ifaunit (var "xs")
-                     (aunit)
-                     (apair (call (var "f") (fst (var "xs")))
-                            (call (call (var "map") (var "f"))
-                                  (snd (var "xs"))))))))
-
-(define (mmap f)
-  (letrec ([iter
-            (lambda (xs) (if (null? xs) null (cons (f (car xs)) (iter (cdr xs)))))])
-    iter))
-
-(define (mmap2 f)
-  (lambda (xs)
-    (if (null? xs)
-        null
-        (cons (f (car xs)) ((mmap2 f) (cdr xs))))))
                    
 
 (define mupl-mapAddN 
@@ -177,7 +155,59 @@
 
 ;; We will test this function directly, so it must do
 ;; as described in the assignment
-(define (compute-free-vars e) "CHANGE")
+(define (compute-free-vars e)
+  (struct (res e fv))
+  (define (f e)
+     (cond
+        [(var? e)
+         (res e (set (var-string e)))]
+
+        [(int? e)
+         (res e (set))]
+
+        [(add? e)
+         (let ([r1 (f (add-e1 e))]
+               [r2 (f (add-e2 e))])
+          (res (add (res-e r1) (res-e r2))
+               (set-union (res-fv r1) (res-fv r2))))]
+        
+        [(ifgreater? e)
+         (let ([r1 (f (if-greater-e1 e))]
+               [r2 (f (if-greater-e2 e))]
+               [r3 (f (if-greater-e3 e))]
+               [r4 (f (if-greater-e4 e))])
+          (res (ifgreater (res-e r1) (res-e r2) (res-e r3) (res-e r4))
+              (set-union (res-fv r1) (res-fv r2) (res-fv r3) (res-fv r4)))
+               
+        [(mlet? e)
+         (let ([r-e (f (mlet-e e))]
+               [r-body (f (mlet-body e))])
+           (res (mlet (mlet-var e) (res-e r-e) (res-e r-body))
+                (set-union (res-fv r-e)
+                    (set-remove (res-fv r-body) (mlet-var e)))))]
+
+        [(apair? e)
+         (set-union (compute-free-vars (apair-e1 e)) (compute-free-vars (apair-e2 e)))]
+         
+        [(fst? e) (compute-free-vars (fst-e e))]
+         
+        [(snd? e) (compute-free-vars (snd-e e))]
+
+        [(aunit? e) (set)]
+         
+        [(isaunit? e) (compute-free-vars (isaunit-e e))]
+
+        [(fun? e)
+         (set-subtract (compute-free-vars (fun-body e))
+                       (set (fun-formal e))
+                       (if (fun-nameopt e) (set (fun-nameopt e)) (set)))]
+         
+        [(closure? e) (compute-free-vars (closure-fun e))]
+
+        [(call? e) (compute-free-vars (call-funexp e))]
+         
+        [#t (error (format "bad MUPL expression: ~v" e))]))
+
 
 ;; Do NOT share code with eval-under-env because that will make
 ;; auto-grading and peer assessment more difficult, so
