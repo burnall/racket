@@ -156,7 +156,7 @@
 ;; We will test this function directly, so it must do
 ;; as described in the assignment
 (define (compute-free-vars e)
-  (struct (res e fv))
+  (struct res (e fv))
   (define (f e)
      (cond
         [(var? e)
@@ -172,12 +172,12 @@
                (set-union (res-fv r1) (res-fv r2))))]
         
         [(ifgreater? e)
-         (let ([r1 (f (if-greater-e1 e))]
-               [r2 (f (if-greater-e2 e))]
-               [r3 (f (if-greater-e3 e))]
-               [r4 (f (if-greater-e4 e))])
+         (let ([r1 (f (ifgreater-e1 e))]
+               [r2 (f (ifgreater-e2 e))]
+               [r3 (f (ifgreater-e3 e))]
+               [r4 (f (ifgreater-e4 e))])
           (res (ifgreater (res-e r1) (res-e r2) (res-e r3) (res-e r4))
-              (set-union (res-fv r1) (res-fv r2) (res-fv r3) (res-fv r4)))
+              (set-union (res-fv r1) (res-fv r2) (res-fv r3) (res-fv r4))))]
                
         [(mlet? e)
          (let ([r-e (f (mlet-e e))]
@@ -187,26 +187,49 @@
                     (set-remove (res-fv r-body) (mlet-var e)))))]
 
         [(apair? e)
-         (set-union (compute-free-vars (apair-e1 e)) (compute-free-vars (apair-e2 e)))]
+         (let ([r1 (f (apair-e1 e))]
+               [r2 (f (apair-e2 e))])
+         (res (apair (res-e r1) (res-e r2))
+              (set-union (res-fv r1) (res-fv r2))))]
          
-        [(fst? e) (compute-free-vars (fst-e e))]
+        [(fst? e)
+         (let ([r (f (fst-e e))])
+           (res (fst (res-e r))
+                (res-fv r)))]
          
-        [(snd? e) (compute-free-vars (snd-e e))]
+        [(snd? e) (let ([r (f (fst-e e))])
+           (res (snd (res-e r))
+                (res-fv r)))]
 
-        [(aunit? e) (set)]
+        [(aunit? e)
+         (res e (set))]
          
-        [(isaunit? e) (compute-free-vars (isaunit-e e))]
+        [(isaunit? e)
+         (let ([r (f (isaunit-e e))])
+           (res (isaunit (res-e r))
+                (res-fv r)))]
 
         [(fun? e)
-         (set-subtract (compute-free-vars (fun-body e))
+         (let* ([r-body (f (fun-body e))]
+                [fv (set-subtract (res-e r-body)
                        (set (fun-formal e))
-                       (if (fun-nameopt e) (set (fun-nameopt e)) (set)))]
-         
-        [(closure? e) (compute-free-vars (closure-fun e))]
+                       (if (fun-nameopt e) (set (fun-nameopt e)) (set)))])
+           (res (fun-challenge (fun-nameopt e) (fun-formal e) (res-e r-body) fv)
+                fv))]
 
-        [(call? e) (compute-free-vars (call-funexp e))]
+        [(closure? e)
+         (let ([r (f (closure-fun e))])
+          (res (closure (res-e r))
+               (res-fv r)))]
+
+        [(call? e)
+         (let ([r-funexp (f (call-funexp e))]
+               [r-actual (f (call-actual e))])
+          (res (call (res-e r-funexp) (res-e r-actual))
+               (set-union (res-fv r-funexp) (res-fv r-actual))))]
          
         [#t (error (format "bad MUPL expression: ~v" e))]))
+  (res-e (f e)))
 
 
 ;; Do NOT share code with eval-under-env because that will make
