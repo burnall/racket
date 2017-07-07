@@ -68,3 +68,12 @@
                              found)
                            #f)))))])
     f))
+
+(define-syntax while-less
+  (syntax-rules (do)
+    [(while-less e1 do e2)
+     (letrec ([v1 e1]
+            [f (lambda ()
+                 (let ([v e2])
+                   (if (< v v1) (f) #t)))])
+       (f))]))
